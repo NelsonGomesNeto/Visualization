@@ -5,7 +5,7 @@ double zoom = 0.7;
 Complex c0 = new Complex(-0.8, 0.156);
 Complex[][] z, c;
 boolean[][] done;
-boolean juliaSet = true;
+boolean juliaSet = false;
 PGraphics pg;
 int calculationId = 0;
 
