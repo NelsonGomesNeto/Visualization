@@ -25,7 +25,8 @@ public class Complex {
   }
   
   public boolean exploded() {
-    return Double.isNaN(this.r);
+    return this.magnitude() > 2;
+    //return Double.isNaN(this.r);
   }
   
   public void applyF(Complex c) {

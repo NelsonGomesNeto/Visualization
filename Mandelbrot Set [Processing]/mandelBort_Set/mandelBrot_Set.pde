@@ -44,7 +44,7 @@ void init() {
 void calculate() {
   int currentCalculationId = calculationId;
   it = 0;
-  for (it = 0; it <= iterations; it ++) {
+  for (it = 0; it <= iterations; it++) {
     for (int i = 0; i < height; i++)
       for (int j = 0; j < width; j++) {
         if (currentCalculationId != calculationId) return;
@@ -92,4 +92,8 @@ void keyReleased() {
     colorMode(RGB, colorPaletteSize, colorPaletteSize, colorPaletteSize);
   if (key == '2')
     colorMode(HSB, colorPaletteSize, colorPaletteSize, colorPaletteSize);
+  if (key == '+')
+    colorFlipSize += 25;
+  if (key == '-')
+    colorFlipSize += 25;
 }
