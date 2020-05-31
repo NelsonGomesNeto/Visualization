@@ -7,7 +7,7 @@ public class Complex {
   }
 
   public double magnitude() {
-    return this.r * this.r + this.i * this.i;
+    return sqrt((float)(this.r * this.r + this.i * this.i));
   }
 
   public void multiply(Complex other) {
@@ -25,7 +25,9 @@ public class Complex {
   }
   
   public boolean exploded() {
-    return this.magnitude() > 2;
+    //return Double.isNaN(this.r);
+    return this.r * this.r + this.i * this.i >= 4;
+    //return this.magnitude() >= 2;
     //return Double.isNaN(this.r);
   }
   
