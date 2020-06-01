@@ -32,8 +32,12 @@ public class Complex {
   }
   
   public void applyF(Complex c) {
-    this.multiply(this);
-    this.add(c);
+    //this.multiply(this);
+    //this.add(c);
+    double r = this.r * this.r - this.i * this.i;
+    double i = this.i * this.r + this.r * this.i;
+    this.r = r + c.r;
+    this.i = i + c.i;
   }
   
   public Complex copy() {

@@ -1,4 +1,6 @@
-int it, iterations = 100000;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+int iterations = int(1e5), dit = 200;
 int colorPaletteSize = 1000, colorFlipSize = 500;
 double xMin = -1.5, xMax = 1.5, yMin = -1.5, yMax = 1.5;
 double zoom = 0.7;
@@ -6,67 +8,98 @@ Complex c0 = new Complex(-0.8, 0.156);
 Complex[][] z, c;
 boolean[][] done;
 boolean juliaSet = false;
-PGraphics pg;
-int calculationId = 0;
+
+color[] colorTable;
+
+int threadCount = 12, threadHeight;
+MainThread mainThread;
+CalculateThread[] calculateThreads;
+double calculationTime = 0;
 
 void setup() {
-  size(800, 800);
-  //pg = createGraphics(width, height);
+  size(900, 900);
+  loadPixels();
   colorMode(HSB, colorPaletteSize, colorPaletteSize, colorPaletteSize);
 
   z = new Complex[height][width];
   c = new Complex[height][width];
   done = new boolean[height][width];
 
-  thread("init");
+  colorTable = new color[iterations];
+  for (int i = 0; i < iterations; i++)
+    colorTable[i] = color(i % colorPaletteSize, colorPaletteSize, colorPaletteSize);
+
+  calculateThreads = new CalculateThread[threadCount];
+  threadHeight = height / threadCount;
+  for (int i = 0; i < threadCount; i++) {
+    calculateThreads[i] = new CalculateThread(i*threadHeight, (i + 1)*threadHeight - 1);
+    calculateThreads[i].start();
+  }
+
+  mainThread = new MainThread();
+  mainThread.start();
 }
 
-void init() {
-  int currentCalculationId = ++calculationId;
-  loadPixels();
-  for (int i = 0; i < height; i++)
-    for (int j = 0; j < width; j++) {
-      if (juliaSet) {
-        z[i][j] = new Complex(xMin + (xMax - xMin) * (j + 1) / width, yMin + (yMax - yMin) * (i + 1) / height);
-        c[i][j] = c0.copy();
-      } else {
-        z[i][j] = new Complex(0, 0);
-        c[i][j] = new Complex(xMin + (xMax - xMin) * (j + 1) / width, yMin + (yMax - yMin) * (i + 1) / height);
-      }
-      done[i][j] = false;
-      pixels[i*width + j] = color(0, 0, colorPaletteSize);
+class MainThread extends Thread {
+  AtomicBoolean updated = new AtomicBoolean();
+
+  void run() {
+    while (true) {
+      updated.set(false);
+      while (!updated.get());
+
+      for (int i = 0; i < threadCount; i++)
+        calculateThreads[i].reseted.set(true);
     }
-  if (currentCalculationId != calculationId) return;
-  calculate();
-  updatePixels();
+  }
 }
 
-void calculate() {
-  int currentCalculationId = calculationId;
-  it = 0;
-  for (it = 0; it <= iterations; it++) {
-    int k = int(colorPaletteSize * (1.0+sin(it / 100.0))/2.0);
-    int r = 2 * k % colorPaletteSize;
-    int g = 3 * k % colorPaletteSize;
-    int b = 1 * k % colorPaletteSize;
-    color col = color(r, g, b);
-    for (int i = 0; i < height; i++)
-      for (int j = 0; j < width; j++) {
-        if (currentCalculationId != calculationId) return;
-        if (!done[i][j]) {
-          z[i][j].applyF(c[i][j]);
-          if (z[i][j].exploded()) {
-            //int col = int(colorPaletteSize * sqrt(it) / sqrt(iterations));
-            
-            pixels[i*width + j] = col;
-            //float a = map(col, 0, 1, 0, colorPaletteSize);
-            //float b = map(col, 0, 1, 0, 2*colorPaletteSize);
-            //float c = map(col, 0, 1, 0, 3*colorPaletteSize);
-            //pixels[i*width + j] = color(int(a) % colorPaletteSize, int(b) % colorPaletteSize, int(c) % colorPaletteSize);
-            done[i][j] = true;
+class CalculateThread extends Thread {
+  int lo, hi;
+  AtomicBoolean reseted = new AtomicBoolean();
+
+  CalculateThread(int lo, int hi) {
+    this.lo = lo;
+    this.hi = hi;
+  }
+
+  void run() {
+    int i, j, it, d, pixelIndex;
+    long prvTime;
+
+    while (true) {
+      reseted.set(false);
+
+      for (i = lo, pixelIndex = lo*width; i <= hi; i++)
+        for (j = 0; j < width; j++, pixelIndex++) {
+          if (juliaSet) {
+            z[i][j] = new Complex(xMin + (xMax - xMin) * (j + 1) / width, yMin + (yMax - yMin) * (i + 1) / height);
+            c[i][j] = c0.copy();
+          } else {
+            z[i][j] = new Complex(0, 0);
+            c[i][j] = new Complex(xMin + (xMax - xMin) * (j + 1) / width, yMin + (yMax - yMin) * (i + 1) / height);
           }
+          done[i][j] = false;
+          pixels[pixelIndex] = color(colorPaletteSize, 0, 0);
         }
+
+      for (it = 0; it < iterations && !reseted.get(); it += dit) {
+        prvTime = System.nanoTime(); 
+        for (i = lo, pixelIndex = lo*width; i <= hi; i++)
+          for (j = 0; j < width; j++, pixelIndex++)
+            if (!done[i][j])
+              for (d = 0; d < dit; d++) {
+                z[i][j].applyF(c[i][j]);
+                if (z[i][j].exploded()) {
+                  pixels[pixelIndex] = colorTable[it + d];
+                  done[i][j] = true;
+                  break;
+                }
+              }
+        calculationTime = (System.nanoTime() - prvTime) / 1000000.0;
       }
+      while (!reseted.get());
+    }
   }
 }
 
@@ -77,8 +110,18 @@ void draw() {
   textSize(20);
   text(String.format("%.2f %.2f", xMin, yMin), width - 200, 20);
   text(String.format("%.2f %.2f", xMax, yMax), width - 200, 40);
-  text(it, width - 200, 60);
+  text(String.format("%.3f", calculationTime), width - 200, 60);
   text(frameRate, width - 200, 80);
+}
+
+void mouseDragged() {
+  double xdelta = (xMax - xMin) / width, ydelta = (yMax - yMin) / height;
+  xMin += xdelta*(pmouseX - mouseX);
+  xMax += xdelta*(pmouseX - mouseX);
+  yMin += ydelta*(pmouseY - mouseY);
+  yMax += ydelta*(pmouseY - mouseY);
+  
+  mainThread.updated.set(true);
 }
 
 void mouseWheel(MouseEvent event) {
@@ -91,7 +134,7 @@ void mouseWheel(MouseEvent event) {
   yMin = y - ydelta; 
   yMax = y + ydelta;
 
-  thread("init");
+  mainThread.updated.set(true);
 }
 
 void keyReleased() {
@@ -100,9 +143,11 @@ void keyReleased() {
     xMax = 1.5;
     yMin = -1.5; 
     yMax = 1.5;
+    mainThread.updated.set(true);
   }
-  if (key == 'd')
-    thread("init");
+  if (key == 'd') {
+    mainThread.updated.set(true);
+  }
   if (key == '1')
     colorMode(RGB, colorPaletteSize, colorPaletteSize, colorPaletteSize);
   if (key == '2')
