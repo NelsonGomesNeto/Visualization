@@ -4,9 +4,26 @@ const std::string_view kClearScreen = "\e[2J";
 const std::string_view kMoveTo00 = "\e[0;0H";
 const std::string_view kResetColor = "\e[0m";
 
-//                             0123456
-const std::string kAsciiMap = " .-*o#@";
+const int kColorLimit = 255;
+
+//                             0123456789
+const std::string kAsciiMap = " .~*:oa#@$";
 char Ascii(const int brightness) { return kAsciiMap[brightness]; }
+int CalcBrightness(const int r, const int g, const int b) {
+  assert(r >= 0 && r <= kColorLimit);
+  assert(g >= 0 && g <= kColorLimit);
+  assert(b >= 0 && b <= kColorLimit);
+  // const int mr = 3, mg = 5, mb = 2;
+  // const int mr = 3, mg = 4, mb = 3;
+  const int mr = 2, mg = 7, mb = 1;
+  // const int mr = 3, mg = 10, mb = 1;
+  const int max_value = mr + mg + mb;
+  const int raw_brightness = (r * mr + g * mg + b * mb) / kColorLimit;
+  const double brightness_ratio = (double)raw_brightness / max_value;
+  const int brightness = std::floor(brightness_ratio * kAsciiMap.size());
+  assert(brightness < kAsciiMap.size());
+  return brightness;
+}
 
 struct Pixel {
   const uint8_t r = 0, g = 0, b = 0;
@@ -17,6 +34,9 @@ struct Pixel {
   std::string AnsiEscapeColor() const {
     return std::format("\e[38;2;{};{};{}m", r, g, b);
   }
+  std::string AnsiBackgroundColor() const {
+    return std::format("\e[48;2;{};{};{}m", r, g, b);
+  }
 };
 template <>
 struct std::formatter<Pixel> {
@@ -24,7 +44,6 @@ struct std::formatter<Pixel> {
   template <class FormatContext>
   auto format(const Pixel& p, FormatContext& ctx) const {
     return std::format_to(ctx.out(), "0x{:06X}", p.Hex());
-    // return std::format_to(ctx.out(), "{}", p.r);
   }
 };
 
@@ -61,35 +80,37 @@ struct Image {
   }
 
   void PrintAscii(const int letter_size) const {
-    const double ratio = (double)1 / letter_size;
-    const int an = std::ceil(n * ratio), am = std::ceil(m * ratio);
+    // I couldn't find a nice .
+    const int block_width = letter_size;
+    const int block_height = letter_size * 2;
+    // const int block_height = std::round((double)letter_size * 2);
+    const int an = std::ceil((double)n / block_height),
+              am = std::ceil((double)m / block_width);
     std::println("original size: {} x {}", n, m);
-    std::println("letter_size: {} {} -> {} x {}", letter_size, ratio, an, am);
+    std::println("letter_size: {} -> {} x {} -> {} x {}", letter_size,
+                 block_width, block_height, an, am);
 
-    const int area = letter_size * letter_size;
     // std::print("{}{}{}", kClearScreen, kMoveTo00, kResetColor);
-    for (int i = 0; i < n; i += letter_size) {
-      for (int j = 0; j < m; j += letter_size) {
+    for (int i = 0; i < n; i += block_height) {
+      for (int j = 0; j < m; j += block_width) {
         int r = 0, g = 0, b = 0;
-        for (int bi = 0; bi < letter_size && i + bi < n; ++bi) {
-          for (int bj = 0; bj < letter_size && j + bj < m; ++bj) {
+        for (int bi = 0; bi < block_height && i + bi < n; ++bi) {
+          for (int bj = 0; bj < block_width && j + bj < m; ++bj) {
             r += pixels[i + bi][j + bj].r;
             g += pixels[i + bi][j + bj].g;
             b += pixels[i + bi][j + bj].b;
           }
         }
+        const int curr_width = std::min(m - j, block_width);
+        const int curr_height = std::min(n - i, block_height);
+        const int area = curr_width * curr_height;
         r /= area, g /= area, b /= area;
-        assert(r >= 0 && r < 256);
-        assert(g >= 0 && g < 256);
-        assert(b >= 0 && b < 256);
-        const int brightness = (r * 3 + g * 5 + b * 2) / 255 / 2;
-        // const int brightness = (r * 2 + g * 8 + b * 2) / 255 / 2;
-        assert(brightness < kAsciiMap.size());
+        const int brightness = CalcBrightness(r, g, b);
         const Pixel pixel(r, g, b);
-        // Try switching to painting the background on empty space instead!
         std::print("{}{}", pixel.AnsiEscapeColor(), Ascii(brightness));
+        // std::print("{}{}", pixel.AnsiBackgroundColor(), ' ');
       }
-      std::println("");
+      std::println("{}", kResetColor);
     }
   }
 };
