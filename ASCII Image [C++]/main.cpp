@@ -80,10 +80,10 @@ struct Image {
   }
 
   void PrintAscii(const int letter_size) const {
-    // I couldn't find a nice .
+    // I couldn't find a nice way to compute the aspect ratio of fonts, but most
+    // of them is 1x2 (width/height) and it does look pretty nice now \o/.
     const int block_width = letter_size;
     const int block_height = letter_size * 2;
-    // const int block_height = std::round((double)letter_size * 2);
     const int an = std::ceil((double)n / block_height),
               am = std::ceil((double)m / block_width);
     std::println("original size: {} x {}", n, m);
